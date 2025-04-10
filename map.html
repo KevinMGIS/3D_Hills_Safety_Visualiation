@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hillsborough Safety Services 3D Bar Map</title>
+  <!-- Include MapLibre GL JS styles and script -->
+  <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
+  <!-- Include deck.gl -->
+  <script src="https://unpkg.com/deck.gl@8.8.0/dist.min.js"></script>
+  <!-- Include Turf.js for centroid calculation -->
+  <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    // Initialize the MapLibre GL JS map with a tilted view (pitch = 45)
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: 'https://demotiles.maplibre.org/style.json', // Open source style URL
+      center: [-82.345, 28.037], // Set to your region's coordinates
+      zoom: 10,
+      pitch: 45 // Tilted view for 3D perspective
+    });
+
+    map.on('load', () => {
+      // Fetch the services_index.geojson file containing your polygon features
+      fetch('data/services_index.geojson')
+        .then(response => response.json())
+        .then(geojsonData => {
+          // Log number of features for debugging
+          console.log('Number of features:', geojsonData.features.length);
+          // Log composite_index values for each feature
+          geojsonData.features.forEach(feature => {
+            console.log('Composite Index:', feature.properties.composite_index);
+          });
+          
+          // Compute centroids from polygon features using Turf.js
+          const centroidFeatures = geojsonData.features.map(feature => {
+            const centroid = turf.centroid(feature);
+            centroid.properties = feature.properties;
+            return centroid;
+          });
+          const centroidsGeoJSON = {
+            type: "FeatureCollection",
+            features: centroidFeatures
+          };
+          
+          // Add a source and circle layer to display the centroids as points
+          map.addSource('centroid-points', {
+            type: 'geojson',
+            data: centroidsGeoJSON
+          });
+          map.addLayer({
+            id: 'centroid-points',
+            type: 'circle',
+            source: 'centroid-points',
+            paint: {
+              'circle-radius': 6,
+              'circle-color': '#007cbf'
+            }
+          });
+          
+          // Create the properties for the deck.gl ColumnLayer (3D bars)
+          const columnLayerProps = {
+            id: 'deck-column-layer',
+            type: deck.ColumnLayer,
+            data: centroidFeatures,
+            diskResolution: 12,         // Adjust for smoother column sides
+            radius: 100,                // Radius of each column in meters
+            extruded: true,
+            elevationScale: 100,        // You can also increase this value if needed
+            getPosition: d => d.geometry.coordinates,
+            getFillColor: d => [255, 140, 0],
+            // Multiply composite_index by 100 for increased height
+            getElevation: d => (Number(d.properties.composite_index) || 0) * 20,
+            pickable: true,
+            onHover: info => {
+              const tooltip = document.getElementById('tooltip');
+              if (info.object) {
+                tooltip.style.display = 'block';
+                tooltip.style.left = info.x + 'px';
+                tooltip.style.top = info.y + 'px';
+                tooltip.innerHTML = `<strong>Composite Index:</strong> ${info.object.properties.composite_index}<br>
+                                     <strong>Fire:</strong> ${info.object.properties.fire_count}<br>
+                                     <strong>Hospital:</strong> ${info.object.properties.hospital_count}<br>
+                                     <strong>Library:</strong> ${info.object.properties.library_count}<br>
+                                     <strong>School:</strong> ${info.object.properties.school_count}`;
+              } else {
+                tooltip.style.display = 'none';
+              }
+            }
+          };
+
+          // Create a MapboxLayer using deck.gl integration and add it to the MapLibre map
+          const deckLayer = new deck.MapboxLayer(columnLayerProps);
+          map.addLayer(deckLayer);
+        })
+        .catch(error => console.error('Error loading GeoJSON:', error));
+    });
+
+    // Create a tooltip element for interactivity
+    const tooltip = document.createElement('div');
+    tooltip.style.position = 'absolute';
+    tooltip.style.zIndex = '1';
+    tooltip.style.pointerEvents = 'none';
+    tooltip.style.background = 'rgba(0, 0, 0, 0.7)';
+    tooltip.style.color = 'white';
+    tooltip.style.padding = '5px';
+    tooltip.style.borderRadius = '3px';
+    tooltip.style.display = 'none';
+    tooltip.id = 'tooltip';
+    document.body.appendChild(tooltip);
+  </script>
+</body>
+</html>

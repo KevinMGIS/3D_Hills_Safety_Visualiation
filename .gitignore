@@ -1,0 +1,30 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+env/
+venv/
+.ipynb_checkpoints/
+
+# Jekyll build files
+_site/
+.jekyll-cache/
+.sass-cache/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Editor temporary files
+*.swp
+*.swo
+*.tmp
+
+# Log files
+*.log
